@@ -2,34 +2,31 @@ package httpserver
 
 import (
 	"fmt"
+	"log"
 	"net/http"
-	"strings"
+	"path"
 )
 
-func HandleFilesDownload(w http.ResponseWriter, r *http.Request) {
+func RunFileServer(download_dir string) {
+	fs := http.FileServer(http.Dir(download_dir))
 
-	var allowedDirs = map[string]string{
-		"books": "../../go_books",
-		"media": "../../media"}
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		ext := path.Ext(r.URL.Path)
+		if ext != "" && ext != "/" { //handle filename
+			filename := path.Base(r.URL.Path)
+			w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"") //force browser to download file
+		}
+		fs.ServeHTTP(w, r)
+	})
 
-	dir := strings.TrimPrefix(r.URL.Path, "/files/")
-	path, ok := allowedDirs[dir]
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-
-	fs := http.FileServer(http.Dir(path))
-	http.StripPrefix("/files/"+dir, fs).ServeHTTP(w, r)
+	log.Printf("Serving directory %q on %s\n", download_dir, ":8080")
 }
 
-func RunHttpSrv() {
+func RunHttpSrv(download_dir string) {
 	http.HandleFunc("/hw", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Hello World")
 	})
 
-	http.HandleFunc("/files/", HandleFilesDownload)
-
-	fmt.Println("SServer started on http://localhost:8080")
-	http.ListenAndServe(":8080", nil)
+	RunFileServer(download_dir)
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
